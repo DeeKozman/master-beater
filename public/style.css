@@ -372,8 +372,16 @@ button.primary.busy::before {
   background: linear-gradient(180deg, #2b2925 0%, #16140f 100%);
   border-bottom: 2px solid #000;
 }
-.wf-toolbar button { padding: 4px 14px; font-size: 11px; min-width: 44px; letter-spacing: 0.6px; }
-.wf-toolbar button.icon-btn { padding: 4px 10px; min-width: 32px; font-size: 14px; letter-spacing: 0; }
+.wf-toolbar button {
+  height: 28px; padding: 0 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  line-height: 1;
+  font-size: 11px; min-width: 44px; letter-spacing: 0.6px;
+}
+.wf-toolbar button.icon-btn {
+  padding: 0 10px; min-width: 32px;
+  font-size: 16px; letter-spacing: 0;
+}
 .zoom-label {
   font-family: "Share Tech Mono", monospace; font-size: 13px;
   color: var(--led-amber); min-width: 60px;
