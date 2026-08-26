@@ -76,9 +76,17 @@
   </section>
 
   <section class="waveform-wrap" id="waveformWrap" hidden>
-    <canvas id="waveform" width="1600" height="220"></canvas>
-    <div class="wf-help">
-      Click empty area to <b>add</b> a beat · click a beat to <b>select</b> · drag to <b>move</b> · <kbd>Delete</kbd> to remove · <kbd>Space</kbd> play/pause
+    <div class="wf-toolbar">
+      <button id="zoomOut" title="Zoom out">−</button>
+      <button id="zoomFit" title="Fit whole song">Fit</button>
+      <button id="zoomIn" title="Zoom in">+</button>
+      <span class="zoom-label" id="zoomLabel">1.00×</span>
+      <span class="wf-help">
+        wheel = zoom · scroll bar = pan · click empty area = <b>add</b> beat · click beat = <b>select</b> · drag = <b>move</b> · <kbd>Del</kbd> remove · <kbd>Space</kbd> play/pause
+      </span>
+    </div>
+    <div class="wf-scroll" id="wfScroll">
+      <canvas id="waveform" height="240"></canvas>
     </div>
   </section>
 

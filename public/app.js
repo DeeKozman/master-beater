@@ -13,6 +13,8 @@
   const metronomeChk = $('metronome'), showRawPeaksChk = $('showRawPeaks');
   const tCurEl = $('tCur'), tTotEl = $('tTot');
   const canvas = $('waveform'), ctx = canvas.getContext('2d');
+  const wfScroll = $('wfScroll');
+  const zoomIn = $('zoomIn'), zoomOut = $('zoomOut'), zoomFit = $('zoomFit'), zoomLabel = $('zoomLabel');
   const detectBtn = $('detectBtn'), clearBtn = $('clearBtn'), regridBtn = $('regridBtn');
   const chooseFolderBtn = $('chooseFolderBtn'), folderLabel = $('folderLabel');
   const renderBtn = $('renderBtn');
@@ -27,7 +29,9 @@
     selectedBeat: -1, dragging: false, dragStartX: 0, dragMoved: false,
     playCtx: null, source: null, gainNode: null, startCtxTime: 0, startOffset: 0,
     playing: false, rafId: 0, lastPulsedIdx: -1, scheduledClicks: [],
+    zoom: 1, wfCache: null,
   };
+  const RULER_H = 20;
 
   const log = (msg, cls = '') => {
     logSection.hidden = false;
@@ -61,7 +65,9 @@
       playBtn.disabled = false;
       stopBtn.disabled = false;
       renderBtn.disabled = !state.folderHandle;
-      drawWaveform();
+      state.zoom = 1;
+      wfScroll.scrollLeft = 0;
+      buildWaveformCache();
       await detectBeats();
     } catch (err) {
       log('Decode failed: ' + err.message, 'err');
@@ -191,86 +197,194 @@
   prevOne.addEventListener('click', () => { beatOneIdxInp.value = Math.max(0, (parseInt(beatOneIdxInp.value,10)||0) - 1); beatOneIdxInp.dispatchEvent(new Event('change')); });
   nextOne.addEventListener('click', () => { beatOneIdxInp.value = (parseInt(beatOneIdxInp.value,10)||0) + 1; beatOneIdxInp.dispatchEvent(new Event('change')); });
 
-  // ---------- Waveform ----------
-  function resizeCanvas() {
-    const rect = canvas.getBoundingClientRect();
+  // ---------- Waveform (with zoom + scroll) ----------
+  function maxZoom() {
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(rect.width * dpr);
-    canvas.height = Math.floor(rect.height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return Math.max(1, Math.floor(16000 / Math.max(300, wfScroll.clientWidth * dpr)));
   }
-  window.addEventListener('resize', () => { resizeCanvas(); drawWaveform(); });
+  function fmtTime(t) {
+    const m = Math.floor(t / 60), s = Math.floor(t % 60);
+    if (t < 10) return t.toFixed(2) + 's';
+    if (t < 60) return s + 's';
+    return m + ':' + String(s).padStart(2, '0');
+  }
+  function pickTickSec(pxPerSec) {
+    const targets = [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120];
+    for (const t of targets) if (pxPerSec * t >= 70) return t;
+    return 120;
+  }
 
-  function drawWaveform(playheadT = null) {
-    resizeCanvas();
-    const rect = canvas.getBoundingClientRect();
-    const w = rect.width, h = rect.height;
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#171b22';
-    ctx.fillRect(0, 0, w, h);
+  function buildWaveformCache() {
     if (!state.audioBuffer) return;
-    const buf = state.audioBuffer;
-    const data = buf.getChannelData(0);
-    const step = Math.max(1, Math.floor(data.length / w));
-    const mid = h / 2;
-    ctx.strokeStyle = '#4a5566';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 0; x < w; x++) {
-      let min = 1, max = -1;
+    const dpr = window.devicePixelRatio || 1;
+    const baseW = Math.max(300, wfScroll.clientWidth);
+    const cssW = Math.round(baseW * state.zoom);
+    const cssH = 240;
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const cache = document.createElement('canvas');
+    cache.width = canvas.width;
+    cache.height = canvas.height;
+    const c = cache.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    c.fillStyle = '#171b22';
+    c.fillRect(0, 0, cssW, cssH);
+
+    // Ruler
+    c.fillStyle = '#1f242d';
+    c.fillRect(0, 0, cssW, RULER_H);
+    const dur = state.audioBuffer.duration;
+    const pxPerSec = cssW / dur;
+    const tickSec = pickTickSec(pxPerSec);
+    c.strokeStyle = '#3a4658';
+    c.fillStyle = '#8b95a5';
+    c.font = '10px "Segoe UI", sans-serif';
+    for (let t = 0; t <= dur + 0.0001; t += tickSec) {
+      const x = t * pxPerSec;
+      c.beginPath(); c.moveTo(x + 0.5, RULER_H - 7); c.lineTo(x + 0.5, RULER_H); c.stroke();
+      c.fillText(fmtTime(t), x + 3, RULER_H - 7);
+    }
+    // Subdivision ticks
+    const subTick = tickSec / 5;
+    if (subTick * pxPerSec >= 8) {
+      c.strokeStyle = '#2a3140';
+      for (let t = 0; t <= dur; t += subTick) {
+        const x = t * pxPerSec;
+        c.beginPath(); c.moveTo(x + 0.5, RULER_H - 3); c.lineTo(x + 0.5, RULER_H); c.stroke();
+      }
+    }
+    // Baseline separator
+    c.strokeStyle = '#2a3140';
+    c.beginPath(); c.moveTo(0, RULER_H + 0.5); c.lineTo(cssW, RULER_H + 0.5); c.stroke();
+
+    // Waveform
+    const data = state.audioBuffer.getChannelData(0);
+    const wfTop = RULER_H;
+    const wfH = cssH - RULER_H;
+    const mid = wfTop + wfH / 2;
+    const amp = (wfH / 2) * 0.92;
+    const step = Math.max(1, Math.floor(data.length / cssW));
+    c.strokeStyle = '#4a5566';
+    c.lineWidth = 1;
+    c.beginPath();
+    for (let x = 0; x < cssW; x++) {
+      let mn = 1, mx = -1;
       const start = x * step;
       const end = Math.min(start + step, data.length);
       for (let i = start; i < end; i++) {
         const v = data[i];
-        if (v < min) min = v;
-        if (v > max) max = v;
+        if (v < mn) mn = v;
+        if (v > mx) mx = v;
       }
-      ctx.moveTo(x + 0.5, mid + min * mid * 0.9);
-      ctx.lineTo(x + 0.5, mid + max * mid * 0.9);
+      c.moveTo(x + 0.5, mid + mn * amp);
+      c.lineTo(x + 0.5, mid + mx * amp);
     }
-    ctx.stroke();
+    c.stroke();
 
-    // Raw peaks (small marks)
+    state.wfCache = cache;
+    zoomLabel.textContent = state.zoom.toFixed(2) + '×';
+    drawFrame();
+  }
+
+  function drawFrame(playheadT = null) {
+    if (!state.audioBuffer || !state.wfCache) return;
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.width / dpr;
+    const cssH = canvas.height / dpr;
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.drawImage(state.wfCache, 0, 0, cssW, cssH);
+
+    const dur = state.audioBuffer.duration;
+    const pxPerSec = cssW / dur;
+
+    // Raw peaks
     if (showRawPeaksChk.checked && state.rawPeaks.length) {
       ctx.fillStyle = '#3a4658';
       for (const t of state.rawPeaks) {
-        const x = (t / buf.duration) * w;
-        ctx.fillRect(x - 0.5, h - 8, 1.5, 6);
+        const x = t * pxPerSec;
+        ctx.fillRect(x - 0.5, cssH - 8, 1.5, 6);
       }
     }
 
-    // Beats (grid marks)
+    // Beats
     const beatOne = state.beatOneIdx;
     const sig = state.timeSig;
     for (let i = 0; i < state.beats.length; i++) {
       const t = state.beats[i];
-      const x = (t / buf.duration) * w;
-      const beatInMeasure = ((i - beatOne) % sig + sig) % sig + 1;
-      const isDownbeat = beatInMeasure === 1;
-      ctx.strokeStyle = isDownbeat ? '#4fc3f7' : '#ff7a45';
-      ctx.lineWidth = isDownbeat ? 2 : 1;
+      const x = t * pxPerSec;
+      const bim = ((i - beatOne) % sig + sig) % sig + 1;
+      const isDown = bim === 1;
+      ctx.strokeStyle = isDown ? '#4fc3f7' : '#ff7a45';
+      ctx.lineWidth = isDown ? 2 : 1;
       if (i === state.selectedBeat) { ctx.strokeStyle = '#ffca4b'; ctx.lineWidth = 3; }
       ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, h);
+      ctx.moveTo(x + 0.5, RULER_H);
+      ctx.lineTo(x + 0.5, cssH);
       ctx.stroke();
-      if (isDownbeat) {
+      // Labels — measure number on downbeats, beat-in-measure number when zoomed enough
+      if (isDown) {
+        const meas = Math.floor((i - beatOne) / sig) + 1;
         ctx.fillStyle = '#4fc3f7';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText(String(Math.floor((i - beatOne) / sig) + 1), x + 3, 12);
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('m' + meas, x + 3, RULER_H + 12);
+      }
+      if (pxPerSec > 40) {
+        ctx.fillStyle = isDown ? '#4fc3f7' : '#ff7a45';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(String(bim), x + 3, cssH - 4);
       }
     }
 
     // Playhead
     if (playheadT != null) {
-      const x = (playheadT / buf.duration) * w;
+      const x = playheadT * pxPerSec;
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h);
+      ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, cssH);
       ctx.stroke();
     }
   }
+
+  // Compat wrapper — old callsites still use drawWaveform
+  const drawWaveform = drawFrame;
+
+  window.addEventListener('resize', () => { buildWaveformCache(); });
+
+  // Zoom controls
+  function setZoom(newZoom, anchorClientX = null) {
+    const cap = maxZoom();
+    newZoom = Math.max(1, Math.min(cap, newZoom));
+    if (newZoom === state.zoom) return;
+    // Preserve the time under an anchor pixel (defaults to viewport center)
+    const scrollRect = wfScroll.getBoundingClientRect();
+    const screenX = (anchorClientX ?? scrollRect.left + scrollRect.width / 2) - scrollRect.left;
+    const beforeCanvasX = wfScroll.scrollLeft + screenX;
+    const beforeCssW = canvas.getBoundingClientRect().width;
+    const anchorT = state.audioBuffer ? (beforeCanvasX / beforeCssW) * state.audioBuffer.duration : 0;
+
+    state.zoom = newZoom;
+    buildWaveformCache();
+
+    const afterCssW = canvas.getBoundingClientRect().width;
+    const afterCanvasX = state.audioBuffer ? (anchorT / state.audioBuffer.duration) * afterCssW : 0;
+    wfScroll.scrollLeft = afterCanvasX - screenX;
+  }
+  zoomIn.addEventListener('click', () => setZoom(state.zoom * 1.5));
+  zoomOut.addEventListener('click', () => setZoom(state.zoom / 1.5));
+  zoomFit.addEventListener('click', () => { setZoom(1); wfScroll.scrollLeft = 0; });
+
+  wfScroll.addEventListener('wheel', (e) => {
+    if (!state.audioBuffer) return;
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+    setZoom(state.zoom * factor, e.clientX);
+  }, { passive: false });
 
   // ---------- Canvas interaction ----------
   const pxToTime = (x) => {
@@ -383,7 +497,7 @@
   playBtn.addEventListener('click', () => state.playing ? stopPlayback() : startPlayback());
   stopBtn.addEventListener('click', stopPlayback);
   metronomeChk.addEventListener('change', () => { if (state.playing) scheduleMetronome(); });
-  showRawPeaksChk.addEventListener('change', drawWaveform);
+  showRawPeaksChk.addEventListener('change', () => drawFrame());
 
   function scheduleMetronome() {
     if (!state.playCtx) return;
@@ -426,7 +540,16 @@
       const bim = ((idx - state.beatOneIdx) % state.timeSig + state.timeSig) % state.timeSig + 1;
       pulseIndicator(bim === 1, bim);
     }
-    drawWaveform(t);
+    drawFrame(t);
+    if (state.zoom > 1) {
+      const cssW = canvas.getBoundingClientRect().width;
+      const playX = (t / state.audioBuffer.duration) * cssW;
+      const view = wfScroll.scrollLeft;
+      const w = wfScroll.clientWidth;
+      if (playX < view + w * 0.1 || playX > view + w * 0.85) {
+        wfScroll.scrollLeft = playX - w * 0.4;
+      }
+    }
     state.rafId = requestAnimationFrame(tick);
   }
   function pulseIndicator(down, num) {
@@ -494,10 +617,14 @@
 
   renderBtn.addEventListener('click', async () => {
     if (!state.audioBuffer || !state.audioBlob || !state.folderHandle) return;
+    const suggested = state.audioName || 'beats';
+    const chosen = window.prompt('Save as (no extension):', suggested);
+    if (chosen === null) return;
+    const safe = chosen.trim().replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_') || 'beats';
     renderBtn.disabled = true;
     detectBtn.disabled = true;
     const meta = buildBeatsMeta();
-    log(`Rendering ${meta.beats.length} beats at ${meta.fps}fps ${meta.width}×${meta.height}…`);
+    log(`Rendering ${meta.beats.length} beats at ${meta.fps}fps ${meta.width}×${meta.height} → ${safe}.mp4 …`);
     try {
       const fd = new FormData();
       fd.append('audio', state.audioBlob, state.audioBlob.name);
@@ -513,7 +640,7 @@
         throw new Error(err.error + (err.stderr ? '\n' + err.stderr : ''));
       }
       const mp4Blob = await res.blob();
-      const base = state.audioName || 'beats';
+      const base = safe;
       await writeFileToFolder(`${base}.mp4`, mp4Blob);
       await writeFileToFolder(`${base}.beats.json`, JSON.stringify({
         source: state.audioBlob.name,
