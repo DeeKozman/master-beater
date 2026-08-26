@@ -1,29 +1,30 @@
 # Master Beater
 
-BPM detector, beat editor, and beat-overlay video renderer.
+BPM detector, beat editor, tempo-conform tool, and beat-overlay video renderer.
 
-Load an MP3 or WAV, auto-detect beats and BPM, hand-edit the beat grid on the waveform, watch a beat indicator flash in time (with optional metronome), and render an MP4 the full length of the song with a `Beat: N   Measure: M   Frame: F` overlay drawn on the frame each beat lands on.
+Load an MP3 or WAV, auto-detect the beats and BPM, hand-edit the beat grid on a
+zoomable waveform, watch a pilot lamp flash in time (with an optional metronome),
+optionally time-stretch the track to a new tempo, and render an MP4 the full
+length of the song with a `Beat: N   Measure: M   Frame: F` overlay burned onto
+the frame each beat lands on — plus a matching `beats.json` and a `beats.srt`
+that doubles as a DaVinci Resolve marker track.
 
-## Features
+Everything runs locally: detection, editing and playback happen in the browser;
+a tiny Node server shells out to FFmpeg for the render and the tempo conform.
 
-- **In-browser BPM & beat detection** — energy-based onset detection on a low-passed copy of the audio.
-- **Rubberband Tempo Lab** — pitch-preserving time-stretch to conform a track from one BPM to another (e.g. 119 → 120). Runs ffmpeg's `rubberband` filter server-side, saves `<name>_<toBPM>bpm.wav`, and can load the result straight back in for beat detection and rendering.
-- **Editable beat grid on the waveform** — click empty area to add, click a beat to select, drag to move, Delete to remove.
-- **Snap-to-BPM grid** button — replace irregular detected beats with a regular grid at the current BPM.
-- **Beat-1 offset + time signature** (4/4, 3/4, 6/8, 5/4, 7/8, 2/4) — controls how beats cycle inside each measure.
-- **Live indicator** flashes on every beat (blue on downbeats, orange on other beats) with the beat-in-measure number.
-- **Metronome click** — audible click during playback; downbeats are higher-pitched.
-- **FPS dropdown**: 12 / 24 / 30 / 60.
-- **Resolution dropdown**: 640×360 / 1280×720 / 1920×1080.
-- **Native folder picker** (File System Access API — Chrome/Edge) writes MP4 + JSON + SRT directly to a folder you choose.
-- **SRT output** doubles as a marker file — drag onto a DaVinci Resolve timeline to get one marker per beat.
+---
 
 ## Requirements
 
-- Node.js 18+
-- FFmpeg on `PATH` (or set `FFMPEG=C:\ffmpeg\bin\ffmpeg.exe`)
-- FFmpeg built with `--enable-librubberband` for the Tempo Lab (the app checks at startup and disables that panel if the filter is missing)
-- Chrome or Edge for the folder picker (Firefox works for everything except direct-to-folder saving)
+- **Node.js 18+**
+- **FFmpeg** on `PATH` (or set `FFMPEG=C:\ffmpeg\bin\ffmpeg.exe`)
+  - built with `--enable-librubberband` for the Tempo Lab — the server probes for
+    the `rubberband` filter at startup and disables that panel if it is missing
+  - `libsoxr` (usual in full builds) is used for the 48 kHz resample in the
+    Tempo Lab
+- **Chrome or Edge** for the "save straight to a folder" picker (File System
+  Access API). Firefox works for everything else; it just routes saved files
+  through the normal Downloads folder.
 
 ## Run
 
@@ -34,42 +35,239 @@ npm start
 
 Then open `http://localhost:8461`.
 
-## Files it writes
+---
 
-For an input `mysong.mp3` it produces in the folder you pick:
+## Workflow
 
-- `mysong.mp4` — black video at your chosen FPS/resolution, the song as audio, and one text overlay per beat frame
-- `mysong.beats.json` — every beat with `time`, `frame`, `beatInMeasure`, `measure`
-- `mysong.beats.srt` — same info as subtitle cues; drop onto a Resolve timeline as markers
+1. **Load audio** — pick an MP3/WAV. It decodes in the browser and detection runs
+   automatically.
+2. **Check the BPM and grid** in *Track & Render Settings* and on the waveform.
+   Fix the tempo, set the time signature, nudge *Beat 1 offset* so the downbeats
+   land where they should, or hit **Snap to BPM grid** to replace the detected
+   beats with a perfectly regular grid.
+3. *(optional)* **Conform the tempo** in the *Rubberband Tempo Lab* — e.g. pull a
+   119 BPM track to a clean 120.
+4. **Preview** — hit Play (or Space). The pilot lamp flashes each beat; turn on
+   the metronome to hear the grid.
+5. **Render** — set FPS, resolution and a file name, optionally choose an output
+   folder, and hit **Render MP4**. You get the video plus `beats.json` and
+   `beats.srt`.
 
-## Overlay format
+Every panel below *Load audio* has a header you can click to **collapse** it.
+Collapse state is remembered per panel (in `localStorage`). The collapsed
+*Track & Render Settings* header still shows the current BPM and beat count.
 
-Each beat frame shows:
+---
 
-```
-Beat: <1-N>   Measure: <M>   Frame: <F>
-```
+## Panels
 
-Where `1-N` cycles through the time signature and `M` counts up from 1.
+### Load audio
 
-## Rubberband Tempo Lab
+Accepts anything the browser can decode (MP3, WAV, and usually M4A/OGG/FLAC).
+The log reports channel count, sample rate and duration after decoding. Note the
+browser may resample to its own audio rate on decode (a 44.1 kHz file often comes
+back as 48 kHz) — this only affects the in-browser analysis, not your source file
+or the render, which always use the original upload.
 
-Load a track, set **From BPM** (auto-filled from detection) and **To BPM**, and hit
-**Conform Tempo → WAV**. The server runs:
+### Track & Render Settings
+
+| Control | What it does |
+| --- | --- |
+| **BPM** | Detected tempo, editable (30–300). **÷2 / ×2** halve or double it (handy when detection locks onto the off-beat or double-time). |
+| **Beats** | Live count of beats currently on the grid. |
+| **Duration** | Track length in seconds. |
+| **Time sig** | 4/4, 3/4, 2/4, 6/8, 5/4, 7/8 — sets how many beats are in a measure, which drives the `Beat:` cycle and the downbeat highlighting. |
+| **Beat 1 offset** | Index of the beat that counts as beat 1 of measure 1. Use the ◀ ▶ buttons to slide the barline until the blue downbeats sit on the actual downbeats. |
+| **FPS** | Render frame rate: 12 / 24 / 30 / 60. Also sets each beat's `Frame:` number. |
+| **Resolution** | Render size: 640×360 / 1280×720 / 1920×1080. |
+
+### Rubberband Tempo Lab
+
+Pitch-preserving time-stretch to conform a track from one tempo to another.
+
+| Control | What it does |
+| --- | --- |
+| **From BPM** | Source tempo, auto-filled from detection, editable. |
+| **To BPM** | Target tempo (default 120). The **120** button is a one-click set. |
+| **Output rate** | **48 kHz (recommended)** or **Match source**. |
+| **Stretch** | Live readout of the speed change (`+0.84%`) and the resulting length. |
+| **Load result back in** | When checked, the conformed WAV replaces the loaded track and re-detection runs, so you can grid and render against the new tempo straight away. |
+| **Conform Tempo → WAV** | Runs the stretch and saves `<name>_<toBPM>bpm.wav` next to your other outputs. |
+
+The server runs:
 
 ```
 ffmpeg -i in -af "aresample=48000:resampler=soxr:precision=28,rubberband=tempo=<to/from>:pitch=1" -c:a pcm_s16le out.wav
 ```
 
-Pitch is preserved. Output defaults to 48 kHz — `rubberband` drifts a few tens of
-milliseconds at 44.1 kHz, and resampling to 48 kHz first makes the stretch
-sample-exact (and keeps multiple stems phase-locked when conformed with the same
-ratio). "Match source" skips the resample if you need the original rate.
+Pitch is preserved. Output defaults to **48 kHz** because the `rubberband` filter
+drifts a few tens of milliseconds at 44.1 kHz — resampling to 48 kHz first makes
+the stretch sample-exact, and keeps multiple stems phase-locked when they are all
+conformed with the same ratio. **Match source** skips the resample if you need to
+stay at the original rate.
 
-With **Load result back in** checked, the conformed audio replaces the loaded
-track so you can immediately re-detect and render against the new tempo.
+The button is disabled when there is no audio loaded, when the ratio is outside
+0.5×–2.0× (halve/double first), when From and To are equal, or when FFmpeg has no
+`rubberband` filter (the header says so).
+
+### Playback & Metronome
+
+| Control | What it does |
+| --- | --- |
+| **Play / Pause** | Start/stop playback (also **Space**). |
+| **Stop** | Stop and reset to the start. |
+| **Pilot lamp** | Flashes on every beat — **blue** on downbeats, **amber** otherwise — and shows the beat-in-measure number. |
+| **Metronome click** | Audible click on each beat during playback; downbeats are pitched higher (1500 Hz vs 900 Hz). |
+| **Show detected peaks** | Toggles the raw onset markers (the small ticks along the bottom of the waveform). |
+| **Time readout** | `current / total` seconds. |
+
+### Waveform & Beat Grid
+
+The waveform (channel 0) with a time ruler, adaptive major/minor ticks, and the
+beat grid drawn on top:
+
+- **Downbeats** — thick blue lines with an `m<measure>` label.
+- **Other beats** — thin orange lines; the beat-in-measure digit appears once you
+  zoom in far enough.
+- **Selected beat** — thick yellow line.
+- **Raw detected peaks** — small ticks along the bottom (toggle in *Playback*).
+- **Playhead** — white line during playback; the view auto-scrolls to follow it
+  when zoomed in.
+
+**Zoom & pan**
+
+- **− / Fit / +** buttons (1.5× steps), or the **mouse wheel** over the waveform
+  (zooms toward the pointer). Zoom is capped so the canvas stays a sane size.
+- Drag the **scrollbar** to pan.
+
+**Editing the grid**
+
+| Action | Result |
+| --- | --- |
+| Click an empty spot | Add a beat there |
+| Click on a beat | Select it (turns yellow) |
+| Drag a beat | Move it |
+| **Delete** / **Backspace** | Remove the selected beat |
+
+Beats stay sorted by time automatically.
+
+### Beats & Output
+
+| Control | What it does |
+| --- | --- |
+| **Re-detect beats** | Throw away the current grid and run detection again. |
+| **Clear beats** | Remove every beat. |
+| **Snap to BPM grid** | Replace the grid with a regular one at the current BPM, anchored on the current *Beat 1* position (its pre-roll offset is kept) and running the length of the track. |
+| **File name** | Base name for the outputs (defaults to the source name; illegal characters are replaced). |
+| **Folder…** | Pick an output folder (Chrome/Edge). Without it, files go to the browser's Downloads folder. The label shows the current target. |
+| **Render MP4** | Uploads the audio and the beat data, renders, and saves the MP4 + JSON + SRT. |
+
+### Log
+
+Timestamped status strip — green for success, red for errors, plain for info.
+
+---
+
+## Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| **Space** | Play / pause (ignored while typing in a field or focused on a button) |
+| **Delete** / **Backspace** | Remove the selected beat |
+
+---
+
+## Files it writes
+
+For file name `mysong` the render produces, in your chosen folder (or Downloads):
+
+- **`mysong.mp4`** — black video at your FPS/resolution, the track as audio, and
+  one text overlay on the frame each beat falls on. Encoded `libx264` (CRF 20,
+  `yuv420p`) + AAC 192k, trimmed to the shorter of audio/video.
+- **`mysong.beats.json`**
+  ```json
+  {
+    "source": "mysong.mp3",
+    "duration": 201.69,
+    "bpm": 120,
+    "timeSignature": "4/4",
+    "fps": 30,
+    "resolution": "1280x720",
+    "beats": [
+      { "index": 0, "time": 0.0000, "frame": 0, "beatInMeasure": 1, "measure": 1 }
+    ]
+  }
+  ```
+- **`mysong.beats.srt`** — one subtitle cue per beat, text
+  `Beat: <n>  Measure: <m>  Frame: <f>`. Drop it onto a DaVinci Resolve timeline
+  to get one marker per beat.
+
+The Tempo Lab writes **`mysong_<toBPM>bpm.wav`** (16-bit PCM).
+
+### Overlay format
+
+```
+Beat: <1..N>   Measure: <M>   Frame: <F>
+```
+
+`1..N` cycles through the time signature; `M` counts up from 1; `F` is the video
+frame index at that beat's timestamp.
+
+---
+
+## How detection works
+
+1. The audio is rendered offline through a **150 Hz low-pass + 40 Hz high-pass**
+   to isolate the kick/bass band.
+2. Peaks are picked on a **rising edge** above **55 % of the peak amplitude**,
+   with a **220 ms** minimum gap between them. These become the raw onset
+   markers.
+3. BPM is the mode of a histogram of `60 / interval` for every gap between
+   consecutive peaks, each value folded into the **70–180** range and rounded to
+   the nearest 0.5.
+4. The raw peaks are used as the initial beat grid — edit them by hand or run
+   **Snap to BPM grid** for a regular one.
+
+Detection is a starting point, not gospel: expect to nudge the BPM (or hit ÷2 /
+×2), set *Beat 1 offset*, and either clean up individual beats or snap to a grid.
+
+---
+
+## Server
+
+| Route | Method | Body | Returns |
+| --- | --- | --- | --- |
+| `/` and assets | GET | — | the app (static `public/`) |
+| `/render` | POST | multipart: `audio`, `beats` (JSON), `fps`, `width`, `height`, `duration` | `video/mp4` stream |
+| `/conform` | POST | multipart: `audio`, `fromBpm`, `toBpm`, `sampleRate` (`48000` \| `source`) | `audio/wav` stream |
+| `/capabilities` | GET | — | `{ "rubberband": bool, "ffmpeg": "<path>" }` |
+
+Uploads and intermediate files live under `os.tmpdir()/master-beater` and are
+deleted after each request. The render command is:
+
+```
+ffmpeg -y -f lavfi -i color=c=black:s=<W>x<H>:r=<fps>:d=<dur> \
+       -i <audio> -vf ass=<generated.ass> \
+       -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p \
+       -c:a aac -b:a 192k -shortest <out.mp4>
+```
+
+The overlay is a generated ASS subtitle with one `Dialogue` per beat.
 
 ## Configuration
 
-- `PORT` env var — server port (default 8461)
-- `FFMPEG` env var — path to `ffmpeg` binary (default: `ffmpeg` on `PATH`)
+| Env var | Default | Notes |
+| --- | --- | --- |
+| `PORT` | `8461` | Server port. |
+| `FFMPEG` | `ffmpeg` (on `PATH`) | Path to the `ffmpeg` binary, **or** the directory containing it (the server appends `ffmpeg.exe` / `ffmpeg`). |
+
+## Project layout
+
+```
+server.js            Express server: /render, /conform, /capabilities
+public/index.html    Markup
+public/style.css     Retro amp/console styling
+public/app.js        All client logic (one IIFE)
+start.bat / stop.bat Windows helpers
+.claude/launch.json  Dev-server config for the Claude Code preview
+```

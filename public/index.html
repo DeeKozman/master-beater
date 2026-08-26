@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Yellowtail&family=Share+Tech+Mono&family=Rubik+Mono+One&family=Special+Elite&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
   <header class="amp-head">
@@ -30,7 +30,7 @@
     <span id="fileLabel" class="muted">no file loaded</span>
   </section>
 
-  <section class="stats" id="statsSection" hidden>
+  <section class="stats collapsible" id="statsSection" data-title="Track &amp; Render Settings" hidden>
     <div class="stat"><label>BPM</label>
       <div class="stat-row">
         <input type="number" id="bpmInput" min="30" max="300" step="0.1" />
@@ -71,8 +71,8 @@
     </div>
   </section>
 
-  <section class="tempo" id="tempoSection" hidden>
-    <div class="tempo-title">Rubberband Tempo Lab<span class="muted" id="rbStatus"></span></div>
+  <section class="tempo collapsible" id="tempoSection" data-title="Rubberband Tempo Lab" hidden>
+    <div class="muted" id="rbStatus"></div>
     <div class="tempo-controls">
       <div class="stat"><label>From&nbsp;BPM</label>
         <input type="number" id="fromBpm" min="20" max="400" step="0.01" />
@@ -100,7 +100,7 @@
     </div>
   </section>
 
-  <section class="indicator-row" id="indicatorRow" hidden>
+  <section class="indicator-row collapsible" id="indicatorRow" data-title="Playback &amp; Metronome" hidden>
     <div class="indicator" id="indicator">
       <div class="indicator-inner"></div>
       <div class="indicator-num" id="indicatorNum">–</div>
@@ -114,7 +114,7 @@
     <div class="time-readout"><span id="tCur">0.00</span> / <span id="tTot">0.00</span></div>
   </section>
 
-  <section class="waveform-wrap" id="waveformWrap" hidden>
+  <section class="waveform-wrap collapsible" id="waveformWrap" data-title="Waveform &amp; Beat Grid" hidden>
     <div class="wf-toolbar">
       <button id="zoomOut" class="icon-btn" title="Zoom out">−</button>
       <button id="zoomFit" title="Fit whole song">Fit</button>
@@ -129,7 +129,7 @@
     </div>
   </section>
 
-  <section class="actions" id="actionsSection" hidden>
+  <section class="actions collapsible" id="actionsSection" data-title="Beats &amp; Output" hidden>
     <button id="detectBtn">Re-detect beats</button>
     <button id="clearBtn">Clear beats</button>
     <button id="regridBtn" title="Rebuild a regular grid from current BPM and Beat 1 position">Snap to BPM grid</button>
@@ -143,10 +143,10 @@
     <button id="renderBtn" class="primary" disabled>Render MP4</button>
   </section>
 
-  <section class="log" id="logSection" hidden>
+  <section class="log collapsible" id="logSection" data-title="Log" hidden>
     <div id="log"></div>
   </section>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

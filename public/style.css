@@ -146,6 +146,41 @@ section { position: relative;
 }
 .muted { color: var(--muted); font-family: "Special Elite", monospace; }
 
+/* ---------- Collapsible panels ---------- */
+section.collapsible { padding: 0; overflow: hidden; }
+.panel-head {
+  width: 100%; margin: 0; display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px;
+  font-family: "Rubik Mono One", sans-serif;
+  font-size: 10px; letter-spacing: 2.2px; text-transform: uppercase;
+  color: #d9d0be; text-align: left;
+  background: linear-gradient(180deg, #2b2925 0%, #16140f 100%);
+  border: 0; border-bottom: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.4);
+  cursor: pointer;
+}
+.panel-head:hover { filter: brightness(1.18); }
+.panel-head:focus-visible { outline: 2px solid var(--led-amber); outline-offset: -2px; }
+.panel-chev {
+  color: var(--led-amber); font-size: 11px; line-height: 1;
+  text-shadow: 0 0 5px rgba(255,176,32,0.6);
+  transition: transform 0.15s ease;
+}
+section.collapsed .panel-chev { transform: rotate(-90deg); }
+.panel-title { flex: 1; }
+.panel-count {
+  font-family: "Share Tech Mono", monospace; letter-spacing: 0.5px;
+  color: var(--led-amber); text-transform: none; font-size: 11px;
+  text-shadow: 0 0 5px rgba(255,176,32,0.5);
+}
+.panel-body { padding: 14px 18px; }
+section.collapsed > .panel-body { display: none; }
+.stats > .panel-body { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.indicator-row > .panel-body { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; }
+.actions > .panel-body { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.waveform-wrap > .panel-body { padding: 0; }
+.log > .panel-body { padding: 0; }
+
 /* File loader */
 .load { display: flex; align-items: center; gap: 14px; }
 .file-btn { position: relative; display: inline-block; cursor: pointer; }
@@ -168,7 +203,6 @@ section { position: relative;
 .file-btn:hover span { filter: brightness(1.1); }
 
 /* ---------- Stats: control cluster ---------- */
-.stats { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .stat {
   padding: 10px 12px;
   min-width: 110px;
@@ -277,14 +311,11 @@ button.primary.busy::before {
 }
 
 /* ---------- Rubberband Tempo Lab ---------- */
-.tempo-title {
-  font-family: "Rubik Mono One", sans-serif;
-  font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
-  color: #1c1a17; text-shadow: 0 1px 0 rgba(255,255,255,0.4);
-  margin-bottom: 12px;
+#rbStatus {
+  display: block; margin: 0 0 10px; font-size: 10px; letter-spacing: 0.5px;
 }
-.tempo-title .muted { margin-left: 12px; font-size: 10px; letter-spacing: 0.5px; }
-.tempo-title .muted.err { color: #a11; text-shadow: none; }
+#rbStatus:empty { display: none; }
+#rbStatus.err { color: #a11; text-shadow: none; }
 .tempo-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .tempo-controls .stat input[type=number] { width: 96px; }
 .tempo-controls button.primary { padding: 8px 16px; }
@@ -304,7 +335,6 @@ button.primary.busy::before {
 }
 
 /* ---------- Beat pilot lamp + transport ---------- */
-.indicator-row { display: flex; align-items: center; gap: 20px; }
 .indicator {
   position: relative;
   width: 110px; height: 110px; border-radius: 50%;
@@ -440,7 +470,6 @@ kbd { background: #1a1815; border: 1px solid #000; color: var(--led-amber);
 #waveform { display: block; height: 240px; background: var(--recess); cursor: crosshair; }
 
 /* ---------- Bottom action row ---------- */
-.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .spacer { flex: 1; }
 #folderLabel {
   font-family: "Special Elite", monospace; font-size: 11px;
@@ -480,13 +509,8 @@ kbd { background: #1a1815; border: 1px solid #000; color: var(--led-amber);
   border-top: 3px solid #000;
   box-shadow: inset 0 4px 12px rgba(0,0,0,0.9);
 }
-.log::before {
-  content: "◉ LOG"; display: block;
-  font-family: "Rubik Mono One", sans-serif; font-size: 10px;
-  color: var(--led-green); letter-spacing: 2px;
-  padding: 4px 22px 2px;
-  text-shadow: 0 0 6px var(--led-green);
-}
+.log .panel-head { color: var(--led-green); text-shadow: 0 0 6px rgba(56,240,120,0.4); }
+.log .panel-chev { color: var(--led-green); text-shadow: 0 0 5px rgba(56,240,120,0.6); }
 #log {
   padding: 4px 22px 10px;
   font-family: "Share Tech Mono", "Consolas", monospace;

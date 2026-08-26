@@ -48,6 +48,48 @@
     logEl.scrollTop = logEl.scrollHeight;
   };
 
+  // ---------- Collapsible panels ----------
+  function initCollapsible() {
+    document.querySelectorAll('section.collapsible').forEach((sec) => {
+      if (sec.querySelector(':scope > .panel-head')) return;
+      const body = document.createElement('div');
+      body.className = 'panel-body';
+      while (sec.firstChild) body.appendChild(sec.firstChild);
+
+      const head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'panel-head';
+      head.innerHTML = '<span class="panel-chev" aria-hidden="true">▾</span>'
+        + '<span class="panel-title"></span><span class="panel-count"></span>';
+      head.querySelector('.panel-title').textContent = sec.dataset.title || sec.id;
+      sec.appendChild(head);
+      sec.appendChild(body);
+
+      const key = 'mb.collapsed.' + sec.id;
+      const apply = (collapsed) => {
+        sec.classList.toggle('collapsed', collapsed);
+        head.setAttribute('aria-expanded', String(!collapsed));
+        if (!collapsed && sec.id === 'waveformWrap' && state.audioBuffer) buildWaveformCache();
+      };
+      let start = false;
+      try { start = localStorage.getItem(key) === '1'; } catch {}
+      apply(start);
+      head.addEventListener('click', () => {
+        const next = !sec.classList.contains('collapsed');
+        try { localStorage.setItem(key, next ? '1' : '0'); } catch {}
+        apply(next);
+      });
+    });
+  }
+  initCollapsible();
+
+  // Optional short summary shown on a panel's header while collapsed.
+  function setPanelCount(sectionId, text) {
+    const el = document.querySelector('#' + sectionId + ' .panel-count');
+    const v = text ? '· ' + text : '';
+    if (el && el.textContent !== v) el.textContent = v;
+  }
+
   // ---------- File load ----------
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -359,6 +401,10 @@
       ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, cssH);
       ctx.stroke();
     }
+
+    const bpm = parseFloat(bpmInput.value);
+    setPanelCount('statsSection',
+      `${Number.isFinite(bpm) ? bpm : '?'} BPM · ${state.beats.length} beat${state.beats.length === 1 ? '' : 's'}`);
   }
 
   // Compat wrapper — old callsites still use drawWaveform
@@ -460,7 +506,8 @@
   });
 
   window.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (state.selectedBeat >= 0) {
         state.beats.splice(state.selectedBeat, 1);
@@ -470,6 +517,7 @@
         e.preventDefault();
       }
     } else if (e.key === ' ') {
+      if (tag === 'BUTTON') return; // let Space activate a focused button (e.g. a panel header)
       if (state.playing) stopPlayback(); else startPlayback();
       e.preventDefault();
     }
