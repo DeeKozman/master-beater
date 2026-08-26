@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Yellowtail&family=Share+Tech+Mono&family=Rubik+Mono+One&family=Special+Elite&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=5" />
+  <link rel="stylesheet" href="style.css?v=6" />
 </head>
 <body>
   <header class="amp-head">
@@ -71,6 +71,35 @@
     </div>
   </section>
 
+  <section class="tempo" id="tempoSection" hidden>
+    <div class="tempo-title">Rubberband Tempo Lab<span class="muted" id="rbStatus"></span></div>
+    <div class="tempo-controls">
+      <div class="stat"><label>From&nbsp;BPM</label>
+        <input type="number" id="fromBpm" min="20" max="400" step="0.01" />
+      </div>
+      <div class="stat"><label>To&nbsp;BPM</label>
+        <div class="stat-row">
+          <input type="number" id="toBpm" min="20" max="400" step="0.01" value="120" />
+          <button id="to120" title="Target 120 BPM">120</button>
+        </div>
+      </div>
+      <div class="stat"><label>Output&nbsp;rate</label>
+        <select id="conformRate">
+          <option value="48000">48 kHz (recommended)</option>
+          <option value="source">Match source</option>
+        </select>
+      </div>
+      <div class="stat"><label>Stretch</label><span id="conformReadout">–</span></div>
+      <label class="toggle"><input type="checkbox" id="conformLoadBack" checked /> Load result back in</label>
+      <button id="conformBtn" class="primary" disabled>Conform Tempo → WAV</button>
+    </div>
+    <div class="tempo-help">
+      Pitch-preserving time-stretch via ffmpeg <b>rubberband</b>. Saves
+      <code>&lt;name&gt;_&lt;toBPM&gt;bpm.wav</code> alongside your other outputs.
+      <span id="conformDur"></span>
+    </div>
+  </section>
+
   <section class="indicator-row" id="indicatorRow" hidden>
     <div class="indicator" id="indicator">
       <div class="indicator-inner"></div>
@@ -118,6 +147,6 @@
     <div id="log"></div>
   </section>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

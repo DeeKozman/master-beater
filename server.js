@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -22,6 +22,13 @@ function resolveFfmpeg() {
 }
 const FFMPEG = resolveFfmpeg();
 console.log('Using ffmpeg:', FFMPEG);
+
+// Probe once for the rubberband filter (needs an ffmpeg built --enable-librubberband).
+let HAS_RUBBERBAND = false;
+execFile(FFMPEG, ['-hide_banner', '-filters'], { maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+  HAS_RUBBERBAND = !err && /\brubberband\b/.test(stdout || '');
+  console.log('rubberband filter:', HAS_RUBBERBAND ? 'available' : 'NOT available');
+});
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -144,6 +151,75 @@ app.post('/render', upload.single('audio'), async (req, res) => {
     stream.pipe(res);
     stream.on('close', () => cleanup([audioPath, assPath, outPath]));
     stream.on('error', () => cleanup([audioPath, assPath, outPath]));
+  });
+});
+
+app.get('/capabilities', (_req, res) => {
+  res.json({ rubberband: HAS_RUBBERBAND, ffmpeg: FFMPEG });
+});
+
+// Pitch-preserving tempo conform (rubberband). From/to BPM -> stretched WAV.
+app.post('/conform', upload.single('audio'), (req, res) => {
+  const audioPath = req.file?.path;
+  if (!audioPath) return res.status(400).json({ error: 'no audio' });
+
+  const done = (status, body) => { cleanup([audioPath]); res.status(status).json(body); };
+
+  if (!HAS_RUBBERBAND) {
+    return done(500, { error: 'This ffmpeg has no rubberband filter. Install a build with --enable-librubberband.' });
+  }
+
+  const fromBpm = parseFloat(req.body.fromBpm);
+  const toBpm = parseFloat(req.body.toBpm);
+  const sampleRate = req.body.sampleRate === 'source' ? 'source' : '48000';
+  if (![fromBpm, toBpm].every(n => Number.isFinite(n) && n > 0)) {
+    return done(400, { error: 'from/to BPM must be positive numbers' });
+  }
+  const ratio = toBpm / fromBpm;               // >1 = faster/shorter
+  if (ratio < 0.5 || ratio > 2.0) {
+    return done(400, { error: `tempo ratio ${ratio.toFixed(3)}x is outside 0.5–2.0 — halve/double first` });
+  }
+
+  const workDir = path.dirname(audioPath);
+  const stem = path.basename(audioPath, path.extname(audioPath));
+  const outPath = path.join(workDir, `${stem}_conform.wav`);
+
+  const filters = [];
+  // rubberband drifts a few tens of ms at 44.1 kHz; resampling to 48 k first fixes it.
+  if (sampleRate === '48000') filters.push('aresample=48000:resampler=soxr:precision=28');
+  filters.push(`rubberband=tempo=${ratio.toFixed(9)}:pitch=1`);
+
+  const args = [
+    '-y',
+    '-i', path.basename(audioPath),
+    '-af', filters.join(','),
+    '-c:a', 'pcm_s16le',
+    path.basename(outPath)
+  ];
+
+  console.log(`[conform] ${fromBpm} -> ${toBpm} BPM (x${ratio.toFixed(5)}) · ${sampleRate === 'source' ? 'source rate' : '48kHz'} · ${FFMPEG}`);
+  const ff = spawn(FFMPEG, args, { cwd: workDir });
+  let stderr = '';
+  let responded = false;
+  const fail = (msg, extra = '') => {
+    if (responded) return;
+    responded = true;
+    cleanup([audioPath, outPath]);
+    res.status(500).json({ error: msg, stderr: extra.slice(-4000) });
+  };
+  ff.stderr.on('data', d => { stderr += d.toString(); });
+  ff.on('error', err => fail('ffmpeg spawn failed: ' + err.message, stderr));
+  ff.on('close', code => {
+    if (responded) return;
+    if (code !== 0) return fail('ffmpeg exit ' + code, stderr);
+    responded = true;
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('Content-Disposition', 'attachment; filename="conformed.wav"');
+    res.setHeader('X-Tempo-Ratio', ratio.toFixed(6));
+    const stream = fs.createReadStream(outPath);
+    stream.pipe(res);
+    stream.on('close', () => cleanup([audioPath, outPath]));
+    stream.on('error', () => cleanup([audioPath, outPath]));
   });
 });
 

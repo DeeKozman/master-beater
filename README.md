@@ -7,6 +7,7 @@ Load an MP3 or WAV, auto-detect beats and BPM, hand-edit the beat grid on the wa
 ## Features
 
 - **In-browser BPM & beat detection** — energy-based onset detection on a low-passed copy of the audio.
+- **Rubberband Tempo Lab** — pitch-preserving time-stretch to conform a track from one BPM to another (e.g. 119 → 120). Runs ffmpeg's `rubberband` filter server-side, saves `<name>_<toBPM>bpm.wav`, and can load the result straight back in for beat detection and rendering.
 - **Editable beat grid on the waveform** — click empty area to add, click a beat to select, drag to move, Delete to remove.
 - **Snap-to-BPM grid** button — replace irregular detected beats with a regular grid at the current BPM.
 - **Beat-1 offset + time signature** (4/4, 3/4, 6/8, 5/4, 7/8, 2/4) — controls how beats cycle inside each measure.
@@ -21,6 +22,7 @@ Load an MP3 or WAV, auto-detect beats and BPM, hand-edit the beat grid on the wa
 
 - Node.js 18+
 - FFmpeg on `PATH` (or set `FFMPEG=C:\ffmpeg\bin\ffmpeg.exe`)
+- FFmpeg built with `--enable-librubberband` for the Tempo Lab (the app checks at startup and disables that panel if the filter is missing)
 - Chrome or Edge for the folder picker (Firefox works for everything except direct-to-folder saving)
 
 ## Run
@@ -49,6 +51,23 @@ Beat: <1-N>   Measure: <M>   Frame: <F>
 ```
 
 Where `1-N` cycles through the time signature and `M` counts up from 1.
+
+## Rubberband Tempo Lab
+
+Load a track, set **From BPM** (auto-filled from detection) and **To BPM**, and hit
+**Conform Tempo → WAV**. The server runs:
+
+```
+ffmpeg -i in -af "aresample=48000:resampler=soxr:precision=28,rubberband=tempo=<to/from>:pitch=1" -c:a pcm_s16le out.wav
+```
+
+Pitch is preserved. Output defaults to 48 kHz — `rubberband` drifts a few tens of
+milliseconds at 44.1 kHz, and resampling to 48 kHz first makes the stretch
+sample-exact (and keeps multiple stems phase-locked when conformed with the same
+ratio). "Match source" skips the resample if you need the original rate.
+
+With **Load result back in** checked, the conformed audio replaces the loaded
+track so you can immediately re-detect and render against the new tempo.
 
 ## Configuration
 

@@ -21,6 +21,10 @@
   const outNameInp = $('outNameInp');
   const halfBpm = $('halfBpm'), doubleBpm = $('doubleBpm');
   const prevOne = $('prevOne'), nextOne = $('nextOne');
+  const tempoSection = $('tempoSection'), rbStatus = $('rbStatus');
+  const fromBpmInp = $('fromBpm'), toBpmInp = $('toBpm'), to120 = $('to120');
+  const conformRate = $('conformRate'), conformReadout = $('conformReadout'), conformDur = $('conformDur');
+  const conformLoadBack = $('conformLoadBack'), conformBtn = $('conformBtn');
 
   const state = {
     audioBuffer: null, audioBlob: null, audioName: '',
@@ -33,6 +37,7 @@
     zoom: 1, wfCache: null,
   };
   const RULER_H = 20;
+  let CONFORM_OK = false; // set from /capabilities
 
   const log = (msg, cls = '') => {
     logSection.hidden = false;
@@ -60,6 +65,7 @@
       durationEl.textContent = buf.duration.toFixed(2) + ' s';
       tTotEl.textContent = buf.duration.toFixed(2);
       statsSection.hidden = false;
+      tempoSection.hidden = false;
       indicatorRow.hidden = false;
       waveformWrap.hidden = false;
       actionsSection.hidden = false;
@@ -137,6 +143,8 @@
     for (const [k, c] of bpmCounts) if (c > bestCount) { bestCount = c; best = k; }
     state.bpm = best;
     bpmInput.value = best;
+    if (!state.fromBpmDirty) fromBpmInp.value = best;
+    updateConformReadout();
 
     // Use detected peaks directly as beats (user can snap-to-grid later)
     state.beats = peaks.slice();
@@ -689,6 +697,117 @@
       renderBtn.textContent = 'Render MP4';
       detectBtn.disabled = false;
       chooseFolderBtn.disabled = false;
+    }
+  });
+
+  // ---------- Rubberband tempo conform ----------
+  function updateConformReadout() {
+    const from = parseFloat(fromBpmInp.value);
+    const to = parseFloat(toBpmInp.value);
+    const valid = from > 0 && to > 0;
+    const ratio = valid ? to / from : NaN;
+    if (!valid) {
+      conformReadout.textContent = '–';
+      conformDur.textContent = '';
+    } else {
+      const pct = (ratio - 1) * 100;
+      conformReadout.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+      conformDur.textContent = state.audioBuffer
+        ? ` · new length ≈ ${(state.audioBuffer.duration / ratio).toFixed(2)} s`
+        : '';
+    }
+    conformBtn.disabled = !CONFORM_OK || !state.audioBlob
+      || !(ratio >= 0.5 && ratio <= 2.0)
+      || Math.abs(ratio - 1) < 1e-6;
+  }
+
+  fromBpmInp.addEventListener('input', () => { state.fromBpmDirty = true; updateConformReadout(); });
+  toBpmInp.addEventListener('input', updateConformReadout);
+  to120.addEventListener('click', () => { toBpmInp.value = 120; updateConformReadout(); });
+
+  fetch('/capabilities')
+    .then(r => r.json())
+    .then(c => {
+      CONFORM_OK = !!c.rubberband;
+      if (CONFORM_OK) {
+        rbStatus.textContent = '';
+        rbStatus.classList.remove('err');
+      } else {
+        rbStatus.textContent = 'rubberband filter missing — rebuild ffmpeg with --enable-librubberband';
+        rbStatus.classList.add('err');
+      }
+      updateConformReadout();
+    })
+    .catch(() => { rbStatus.textContent = 'server capability check failed'; rbStatus.classList.add('err'); });
+
+  conformBtn.addEventListener('click', async () => {
+    if (!state.audioBlob) { log('Load an audio file first.', 'err'); return; }
+    const from = parseFloat(fromBpmInp.value);
+    const to = parseFloat(toBpmInp.value);
+    if (!(from > 0 && to > 0)) { log('Enter valid From / To BPM.', 'err'); return; }
+    const ratio = to / from;
+    if (!(ratio >= 0.5 && ratio <= 2.0)) { log(`Ratio ${ratio.toFixed(3)}× out of range — halve or double first.`, 'err'); return; }
+
+    const rate = conformRate.value === 'source' ? 'source' : '48000';
+    const rawBase = (outNameInp.value || state.audioName || 'audio').trim();
+    const safeBase = rawBase.replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_').replace(/_(\d+(\.\d+)?)bpm$/i, '') || 'audio';
+    const outName = `${safeBase}_${String(to).replace(/\.0+$/, '')}bpm.wav`;
+
+    conformBtn.disabled = true;
+    conformBtn.classList.add('busy');
+    conformBtn.textContent = 'Conforming…';
+    renderBtn.disabled = true;
+    if (rate === 'source' && state.audioBuffer && state.audioBuffer.sampleRate === 44100) {
+      log('Note: "match source" at 44.1 kHz — rubberband drifts a few tens of ms. 48 kHz is exact.', 'err');
+    }
+    log(`Conforming ${from} → ${to} BPM (×${ratio.toFixed(5)}, ${rate === 'source' ? 'source rate' : '48 kHz'})…`);
+    try {
+      const fd = new FormData();
+      fd.append('audio', state.audioBlob, state.audioBlob.name || 'audio.wav');
+      fd.append('fromBpm', String(from));
+      fd.append('toBpm', String(to));
+      fd.append('sampleRate', rate === 'source' ? 'source' : '48000');
+
+      const res = await fetch('/conform', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'conform failed' }));
+        throw new Error(err.error + (err.stderr ? '\n' + err.stderr : ''));
+      }
+      const wavBlob = await res.blob();
+      await saveOne(outName, wavBlob);
+      const dest = state.folderHandle ? state.folderHandle.name + '/' : 'Downloads/';
+      log(`Saved ${outName} (${(wavBlob.size / 1024 / 1024).toFixed(1)} MB) to ${dest}`, 'ok');
+
+      if (conformLoadBack.checked) {
+        const arrBuf = await wavBlob.arrayBuffer();
+        const ac = new (window.AudioContext || window.webkitAudioContext)();
+        const buf = await ac.decodeAudioData(arrBuf);
+        if (state.playing) stopPlayback();
+        state.audioBuffer = buf;
+        state.audioBlob = new File([wavBlob], outName, { type: 'audio/wav' });
+        state.audioName = outName.replace(/\.wav$/i, '');
+        fileLabel.textContent = outName;
+        durationEl.textContent = buf.duration.toFixed(2) + ' s';
+        tTotEl.textContent = buf.duration.toFixed(2);
+        outNameInp.value = state.audioName;
+        state.bpm = to;
+        bpmInput.value = to;
+        fromBpmInp.value = to;
+        state.fromBpmDirty = false;
+        state.zoom = 1;
+        wfScroll.scrollLeft = 0;
+        buildWaveformCache();
+        log(`Loaded conformed audio: ${buf.numberOfChannels}ch, ${buf.sampleRate} Hz, ${buf.duration.toFixed(2)} s. Re-detecting…`, 'ok');
+        await detectBeats();
+        log('Tip: set BPM and hit "Snap to BPM grid" for a clean grid at the new tempo.');
+      }
+    } catch (err) {
+      log('Conform error: ' + err.message, 'err');
+    } finally {
+      conformBtn.classList.remove('busy');
+      conformBtn.textContent = 'Conform Tempo → WAV';
+      renderBtn.disabled = false;
+      updateConformReadout();
     }
   });
 })();
