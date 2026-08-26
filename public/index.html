@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Master Beater</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Master&nbsp;Beater</h1>
+    <div class="tagline">BPM detection · beat editor · overlay video renderer</div>
+  </header>
+
+  <section class="load">
+    <label class="file-btn">
+      <input type="file" id="fileInput" accept="audio/*,.mp3,.wav" />
+      <span>Load audio (MP3 / WAV)</span>
+    </label>
+    <span id="fileLabel" class="muted">no file loaded</span>
+  </section>
+
+  <section class="stats" id="statsSection" hidden>
+    <div class="stat"><label>BPM</label>
+      <div class="stat-row">
+        <input type="number" id="bpmInput" min="30" max="300" step="0.1" />
+        <button id="halfBpm" title="Halve BPM">÷2</button>
+        <button id="doubleBpm" title="Double BPM">×2</button>
+      </div>
+    </div>
+    <div class="stat"><label>Beats</label><span id="beatCount">0</span></div>
+    <div class="stat"><label>Duration</label><span id="duration">0.00 s</span></div>
+    <div class="stat"><label>Time sig</label>
+      <select id="timeSig">
+        <option value="4">4/4</option>
+        <option value="3">3/4</option>
+        <option value="2">2/4</option>
+        <option value="6">6/8</option>
+        <option value="5">5/4</option>
+        <option value="7">7/8</option>
+      </select>
+    </div>
+    <div class="stat"><label>Beat&nbsp;1 offset</label>
+      <div class="stat-row">
+        <input type="number" id="beatOneIdx" min="0" step="1" value="0" style="width:70px" />
+        <button id="prevOne" title="Shift left">◀</button>
+        <button id="nextOne" title="Shift right">▶</button>
+      </div>
+    </div>
+    <div class="stat"><label>FPS</label>
+      <select id="fps">
+        <option>12</option><option>24</option><option selected>30</option><option>60</option>
+      </select>
+    </div>
+    <div class="stat"><label>Resolution</label>
+      <select id="resolution">
+        <option value="640x360">640 × 360</option>
+        <option value="1280x720" selected>1280 × 720</option>
+        <option value="1920x1080">1920 × 1080</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="indicator-row" id="indicatorRow" hidden>
+    <div class="indicator" id="indicator">
+      <div class="indicator-inner"></div>
+      <div class="indicator-num" id="indicatorNum">–</div>
+    </div>
+    <div class="playback">
+      <button id="playBtn" disabled>▶ Play</button>
+      <button id="stopBtn" disabled>■ Stop</button>
+      <label class="toggle"><input type="checkbox" id="metronome" /> Metronome click</label>
+      <label class="toggle"><input type="checkbox" id="showRawPeaks" checked /> Show detected peaks</label>
+    </div>
+    <div class="time-readout"><span id="tCur">0.00</span> / <span id="tTot">0.00</span></div>
+  </section>
+
+  <section class="waveform-wrap" id="waveformWrap" hidden>
+    <canvas id="waveform" width="1600" height="220"></canvas>
+    <div class="wf-help">
+      Click empty area to <b>add</b> a beat · click a beat to <b>select</b> · drag to <b>move</b> · <kbd>Delete</kbd> to remove · <kbd>Space</kbd> play/pause
+    </div>
+  </section>
+
+  <section class="actions" id="actionsSection" hidden>
+    <button id="detectBtn">Re-detect beats</button>
+    <button id="clearBtn">Clear beats</button>
+    <button id="regridBtn" title="Rebuild a regular grid from current BPM and Beat 1 position">Snap to BPM grid</button>
+    <div class="spacer"></div>
+    <button id="chooseFolderBtn">Choose output folder…</button>
+    <span id="folderLabel" class="muted">no folder chosen</span>
+    <button id="renderBtn" class="primary" disabled>Render MP4</button>
+  </section>
+
+  <section class="log" id="logSection" hidden>
+    <div id="log"></div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

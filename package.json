@@ -1,0 +1,13 @@
+{
+  "name": "master-beater",
+  "version": "0.1.0",
+  "description": "BPM detector and beat-overlay video generator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.0.1"
+  }
+}
