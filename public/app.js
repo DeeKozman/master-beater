@@ -622,7 +622,10 @@
     if (chosen === null) return;
     const safe = chosen.trim().replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_') || 'beats';
     renderBtn.disabled = true;
+    renderBtn.classList.add('busy');
+    renderBtn.textContent = 'Rendering…';
     detectBtn.disabled = true;
+    chooseFolderBtn.disabled = true;
     const meta = buildBeatsMeta();
     log(`Rendering ${meta.beats.length} beats at ${meta.fps}fps ${meta.width}×${meta.height} → ${safe}.mp4 …`);
     try {
@@ -657,7 +660,10 @@
       log('Render error: ' + err.message, 'err');
     } finally {
       renderBtn.disabled = false;
+      renderBtn.classList.remove('busy');
+      renderBtn.textContent = 'Render MP4';
       detectBtn.disabled = false;
+      chooseFolderBtn.disabled = false;
     }
   });
 })();

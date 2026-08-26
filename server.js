@@ -7,7 +7,21 @@ const os = require('os');
 const crypto = require('crypto');
 
 const PORT = 8461;
-const FFMPEG = process.env.FFMPEG || 'ffmpeg';
+function resolveFfmpeg() {
+  let v = process.env.FFMPEG;
+  if (!v) return 'ffmpeg';
+  v = v.trim().replace(/^["']|["']$/g, '');
+  // If it points to a directory (ends in slash) or exists as a directory, append the binary.
+  const endsWithSep = /[\\/]$/.test(v);
+  let looksLikeDir = endsWithSep;
+  try { if (!looksLikeDir && fs.statSync(v).isDirectory()) looksLikeDir = true; } catch {}
+  if (looksLikeDir) {
+    v = path.join(v, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+  }
+  return v;
+}
+const FFMPEG = resolveFfmpeg();
+console.log('Using ffmpeg:', FFMPEG);
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -108,23 +122,28 @@ app.post('/render', upload.single('audio'), async (req, res) => {
     path.basename(outPath)
   ];
 
+  console.log(`[render] ${beats.length} beats · ${fps}fps · ${width}x${height} · ${duration.toFixed(2)}s · ${FFMPEG}`);
   const ff = spawn(FFMPEG, args, { cwd: workDir });
   let stderr = '';
-  ff.stderr.on('data', d => { stderr += d.toString(); });
-  ff.on('error', err => {
+  let responded = false;
+  const fail = (msg, extra = '') => {
+    if (responded) return;
+    responded = true;
     cleanup([audioPath, assPath, outPath]);
-    res.status(500).json({ error: 'ffmpeg spawn failed: ' + err.message });
-  });
+    res.status(500).json({ error: msg, stderr: extra.slice(-4000) });
+  };
+  ff.stderr.on('data', d => { stderr += d.toString(); });
+  ff.on('error', err => fail('ffmpeg spawn failed: ' + err.message, stderr));
   ff.on('close', code => {
-    if (code !== 0) {
-      cleanup([audioPath, assPath, outPath]);
-      return res.status(500).json({ error: 'ffmpeg exit ' + code, stderr: stderr.slice(-4000) });
-    }
+    if (responded) return;
+    if (code !== 0) return fail('ffmpeg exit ' + code, stderr);
+    responded = true;
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Content-Disposition', `attachment; filename="beats.mp4"`);
     const stream = fs.createReadStream(outPath);
     stream.pipe(res);
     stream.on('close', () => cleanup([audioPath, assPath, outPath]));
+    stream.on('error', () => cleanup([audioPath, assPath, outPath]));
   });
 });
 
