@@ -18,6 +18,7 @@
   const detectBtn = $('detectBtn'), clearBtn = $('clearBtn'), regridBtn = $('regridBtn');
   const chooseFolderBtn = $('chooseFolderBtn'), folderLabel = $('folderLabel');
   const renderBtn = $('renderBtn');
+  const outNameInp = $('outNameInp');
   const halfBpm = $('halfBpm'), doubleBpm = $('doubleBpm');
   const prevOne = $('prevOne'), nextOne = $('nextOne');
 
@@ -64,7 +65,8 @@
       actionsSection.hidden = false;
       playBtn.disabled = false;
       stopBtn.disabled = false;
-      renderBtn.disabled = !state.folderHandle;
+      renderBtn.disabled = false;
+      if (!outNameInp.value) outNameInp.value = state.audioName || 'beats';
       state.zoom = 1;
       wfScroll.scrollLeft = 0;
       buildWaveformCache();
@@ -565,17 +567,25 @@
   // ---------- Folder + render + save ----------
   chooseFolderBtn.addEventListener('click', async () => {
     if (!window.showDirectoryPicker) {
-      log('This browser lacks the File System Access API. Use Chrome or Edge.', 'err');
+      log('Folder picker not available here — files will save to the browser Downloads folder.', 'err');
+      state.folderHandle = null;
+      folderLabel.textContent = 'Downloads (default)';
       return;
     }
     try {
       const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
       state.folderHandle = handle;
       folderLabel.textContent = handle.name + '/';
-      renderBtn.disabled = !state.audioBuffer;
       log(`Output folder: ${handle.name}/`, 'ok');
     } catch (err) {
-      if (err.name !== 'AbortError') log('Folder pick failed: ' + err.message, 'err');
+      if (err.name === 'AbortError') return;
+      if (err.name === 'SecurityError' || /iframe|embed/i.test(err.message)) {
+        log('Folder picker blocked in this window. Falling back to browser Downloads.', 'err');
+      } else {
+        log('Folder pick failed: ' + err.message + ' — falling back to Downloads.', 'err');
+      }
+      state.folderHandle = null;
+      folderLabel.textContent = 'Downloads (default)';
     }
   });
 
@@ -607,27 +617,42 @@
     }).join('\n');
   }
 
-  async function writeFileToFolder(name, blobOrText) {
-    const fh = await state.folderHandle.getFileHandle(name, { create: true });
-    const w = await fh.createWritable();
-    if (blobOrText instanceof Blob) await w.write(blobOrText);
-    else await w.write(new Blob([blobOrText], { type: 'text/plain' }));
-    await w.close();
+  async function saveOne(name, blobOrText, mime) {
+    const blob = blobOrText instanceof Blob
+      ? blobOrText
+      : new Blob([blobOrText], { type: mime || 'text/plain' });
+    if (state.folderHandle) {
+      const fh = await state.folderHandle.getFileHandle(name, { create: true });
+      const w = await fh.createWritable();
+      await w.write(blob);
+      await w.close();
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
   }
 
   renderBtn.addEventListener('click', async () => {
-    if (!state.audioBuffer || !state.audioBlob || !state.folderHandle) return;
-    const suggested = state.audioName || 'beats';
-    const chosen = window.prompt('Save as (no extension):', suggested);
-    if (chosen === null) return;
-    const safe = chosen.trim().replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_') || 'beats';
+    if (!state.audioBuffer || !state.audioBlob) {
+      log('Load an audio file first.', 'err');
+      return;
+    }
+    const rawName = (outNameInp.value || state.audioName || 'beats').trim();
+    const safe = rawName.replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_') || 'beats';
+    outNameInp.value = safe;
+    const dest = state.folderHandle ? state.folderHandle.name + '/' : 'Downloads/';
     renderBtn.disabled = true;
     renderBtn.classList.add('busy');
     renderBtn.textContent = 'Rendering…';
     detectBtn.disabled = true;
     chooseFolderBtn.disabled = true;
     const meta = buildBeatsMeta();
-    log(`Rendering ${meta.beats.length} beats at ${meta.fps}fps ${meta.width}×${meta.height} → ${safe}.mp4 …`);
+    log(`Rendering ${meta.beats.length} beats at ${meta.fps}fps ${meta.width}×${meta.height} → ${dest}${safe}.mp4 …`);
     try {
       const fd = new FormData();
       fd.append('audio', state.audioBlob, state.audioBlob.name);
@@ -644,8 +669,8 @@
       }
       const mp4Blob = await res.blob();
       const base = safe;
-      await writeFileToFolder(`${base}.mp4`, mp4Blob);
-      await writeFileToFolder(`${base}.beats.json`, JSON.stringify({
+      await saveOne(`${base}.mp4`, mp4Blob);
+      await saveOne(`${base}.beats.json`, JSON.stringify({
         source: state.audioBlob.name,
         duration: state.audioBuffer.duration,
         bpm: state.bpm,
@@ -653,9 +678,9 @@
         fps: meta.fps,
         resolution: `${meta.width}x${meta.height}`,
         beats: meta.beats
-      }, null, 2));
-      await writeFileToFolder(`${base}.beats.srt`, beatsToSrt(meta.beats));
-      log(`Saved ${base}.mp4, ${base}.beats.json, ${base}.beats.srt to ${state.folderHandle.name}/`, 'ok');
+      }, null, 2), 'application/json');
+      await saveOne(`${base}.beats.srt`, beatsToSrt(meta.beats), 'application/x-subrip');
+      log(`Saved ${base}.mp4, ${base}.beats.json, ${base}.beats.srt to ${dest}`, 'ok');
     } catch (err) {
       log('Render error: ' + err.message, 'err');
     } finally {

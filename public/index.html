@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Yellowtail&family=Share+Tech+Mono&family=Rubik+Mono+One&family=Special+Elite&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
   <header class="amp-head">
@@ -87,9 +87,9 @@
 
   <section class="waveform-wrap" id="waveformWrap" hidden>
     <div class="wf-toolbar">
-      <button id="zoomOut" title="Zoom out">−</button>
+      <button id="zoomOut" class="icon-btn" title="Zoom out">−</button>
       <button id="zoomFit" title="Fit whole song">Fit</button>
-      <button id="zoomIn" title="Zoom in">+</button>
+      <button id="zoomIn" class="icon-btn" title="Zoom in">+</button>
       <span class="zoom-label" id="zoomLabel">1.00×</span>
       <span class="wf-help">
         wheel = zoom · scroll bar = pan · click empty area = <b>add</b> beat · click beat = <b>select</b> · drag = <b>move</b> · <kbd>Del</kbd> remove · <kbd>Space</kbd> play/pause
@@ -105,8 +105,12 @@
     <button id="clearBtn">Clear beats</button>
     <button id="regridBtn" title="Rebuild a regular grid from current BPM and Beat 1 position">Snap to BPM grid</button>
     <div class="spacer"></div>
-    <button id="chooseFolderBtn">Choose output folder…</button>
-    <span id="folderLabel" class="muted">no folder chosen</span>
+    <div class="output-group">
+      <label class="mini-label" for="outNameInp">File name</label>
+      <input type="text" id="outNameInp" placeholder="beats" />
+    </div>
+    <button id="chooseFolderBtn" title="Optional: pick a folder to save into. Falls back to browser Downloads.">Folder…</button>
+    <span id="folderLabel" class="muted">Downloads (default)</span>
     <button id="renderBtn" class="primary" disabled>Render MP4</button>
   </section>
 
@@ -114,6 +118,6 @@
     <div id="log"></div>
   </section>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

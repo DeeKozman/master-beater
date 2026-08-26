@@ -372,7 +372,8 @@ button.primary.busy::before {
   background: linear-gradient(180deg, #2b2925 0%, #16140f 100%);
   border-bottom: 2px solid #000;
 }
-.wf-toolbar button { padding: 3px 10px; font-size: 12px; min-width: 32px; }
+.wf-toolbar button { padding: 4px 14px; font-size: 11px; min-width: 44px; letter-spacing: 0.6px; }
+.wf-toolbar button.icon-btn { padding: 4px 10px; min-width: 32px; font-size: 14px; letter-spacing: 0; }
 .zoom-label {
   font-family: "Share Tech Mono", monospace; font-size: 13px;
   color: var(--led-amber); min-width: 60px;
@@ -412,7 +413,31 @@ kbd { background: #1a1815; border: 1px solid #000; color: var(--led-amber);
   padding: 4px 8px;
   background: rgba(0,0,0,0.08); border-radius: 3px;
   border: 1px inset rgba(0,0,0,0.1);
+  max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.output-group {
+  display: inline-flex; flex-direction: column; gap: 2px;
+  padding: 4px 8px 5px;
+  background: linear-gradient(180deg, #2b2925 0%, #1a1815 100%);
+  border: 1px solid #000; border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.5);
+}
+.mini-label {
+  font-family: "Rubik Mono One", sans-serif; font-size: 8px;
+  color: #d9d0be; text-transform: uppercase; letter-spacing: 2px;
+  text-shadow: 0 1px 0 #000;
+}
+#outNameInp {
+  font-family: "Share Tech Mono", monospace; font-size: 14px;
+  color: var(--led-amber);
+  background: var(--recess);
+  border: 1px solid #000; border-radius: 3px;
+  padding: 2px 8px; width: 180px;
+  text-shadow: 0 0 5px rgba(255,176,32,0.7);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
+  outline: none;
+}
+#outNameInp:focus { box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), 0 0 6px rgba(255,176,32,0.5); }
 
 /* ---------- Log strip ---------- */
 .log {
