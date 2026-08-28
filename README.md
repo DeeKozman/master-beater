@@ -1,5 +1,9 @@
 # Master Beater
 
+<p align="center">
+  <img src="docs/hero.png" alt="Master Beater: load-audio bar, Track &amp; Render Settings, Rubberband Tempo Lab, Playback &amp; Metronome, and an editable waveform beat grid" width="860">
+</p>
+
 BPM detector, beat editor, tempo-conform tool, and beat-overlay video renderer.
 
 Load an MP3 or WAV, auto-detect the beats and BPM, hand-edit the beat grid on a
