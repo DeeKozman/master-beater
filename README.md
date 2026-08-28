@@ -18,26 +18,195 @@ a tiny Node server shells out to FFmpeg for the render and the tempo conform.
 
 ---
 
-## Requirements
+## Installation
 
-- **Node.js 18+**
-- **FFmpeg** on `PATH` (or set `FFMPEG=C:\ffmpeg\bin\ffmpeg.exe`)
-  - built with `--enable-librubberband` for the Tempo Lab — the server probes for
-    the `rubberband` filter at startup and disables that panel if it is missing
-  - `libsoxr` (usual in full builds) is used for the 48 kHz resample in the
-    Tempo Lab
-- **Chrome or Edge** for the "save straight to a folder" picker (File System
-  Access API). Firefox works for everything else; it just routes saved files
-  through the normal Downloads folder.
+You need two things installed once — **Node.js** and **FFmpeg** — then you drop
+the app folder anywhere and run it. Follow the steps for your platform.
 
-## Run
+### Step 1 — Install Node.js (all platforms)
+
+1. Go to <https://nodejs.org> and download the **LTS** installer (version **18 or
+   newer**).
+2. Run the installer and accept the defaults.
+3. Open a terminal — **Terminal** on macOS/Linux, **PowerShell** or **Command
+   Prompt** on Windows — and check it worked:
+
+   ```bash
+   node --version
+   ```
+
+   You should see `v18.x.x` or higher.
+
+### Step 2 — Install FFmpeg
+
+FFmpeg does the video render and the pitch-preserving tempo stretch. The app runs
+plain `ffmpeg` from your `PATH`. For the **Rubberband Tempo Lab** you need a build
+that includes the `rubberband` filter — the "full" builds below have it, the
+"essentials" builds do **not**. Everything except the Tempo Lab works with any
+FFmpeg; the app detects a missing `rubberband` filter and greys out that one
+panel.
+
+<details open>
+<summary><b>macOS</b></summary>
+
+**Recommended — Homebrew** (its FFmpeg is built with `rubberband`):
+
+1. If you don't have Homebrew, install it — paste the command from
+   <https://brew.sh> into Terminal and follow the prompts.
+2. Install FFmpeg:
+
+   ```bash
+   brew install ffmpeg
+   ```
+
+3. Verify (the second command should print a line, not nothing):
+
+   ```bash
+   ffmpeg -version
+   ffmpeg -hide_banner -filters | grep rubberband
+   ```
+
+Homebrew puts `ffmpeg` on your `PATH` automatically (`/opt/homebrew/bin` on Apple
+Silicon, `/usr/local/bin` on Intel).
+
+**Without Homebrew** (note: these builds may not include `rubberband` — use
+Homebrew if you need the Tempo Lab):
+
+1. Download the latest `ffmpeg` build from <https://evermeet.cx/ffmpeg/>.
+2. Double-click the downloaded `.zip` to unpack it — you get a single file named
+   `ffmpeg`.
+3. Move it into `/usr/local/bin` so it's on your `PATH`:
+
+   ```bash
+   sudo mkdir -p /usr/local/bin
+   sudo mv ~/Downloads/ffmpeg /usr/local/bin/ffmpeg
+   sudo chmod +x /usr/local/bin/ffmpeg
+   ```
+
+4. The first time you run it, macOS blocks it ("cannot verify the developer").
+   Open **System Settings → Privacy & Security**, scroll to the bottom, click
+   **Allow Anyway**, then run `ffmpeg -version` once more and click **Open**.
+
+</details>
+
+<details open>
+<summary><b>Windows</b></summary>
+
+**Recommended — winget** (installs a full build and sets `PATH` for you):
+
+```powershell
+winget install "FFmpeg (Full build)"
+```
+
+Close and reopen PowerShell afterwards, then verify:
+
+```powershell
+ffmpeg -version
+ffmpeg -hide_banner -filters | findstr rubberband
+```
+
+**Manual install:**
+
+1. Go to <https://www.gyan.dev/ffmpeg/builds/>.
+2. Under **release builds**, download **`ffmpeg-release-full.7z`**. (The `full`
+   build has the `rubberband` filter; `essentials` does not.)
+3. Extract the `.7z` with [7-Zip](https://www.7-zip.org/) or WinRAR. You get a
+   folder like `ffmpeg-7.1-full_build`.
+4. Move that folder to `C:\ffmpeg` so the program ends up at
+   **`C:\ffmpeg\bin\ffmpeg.exe`**.
+5. Add `C:\ffmpeg\bin` to your `PATH`:
+   - Press **Start**, type `environment variables`, open **Edit the system
+     environment variables**.
+   - Click **Environment Variables…**
+   - Under **User variables**, select **Path** → **Edit…** → **New**, paste
+     `C:\ffmpeg\bin`, then **OK** on every dialog.
+   - Close and reopen any terminal windows.
+6. Verify in a **new** PowerShell window:
+
+   ```powershell
+   ffmpeg -version
+   ffmpeg -hide_banner -filters | findstr rubberband
+   ```
+
+</details>
+
+<details open>
+<summary><b>Linux</b></summary>
+
+Install from your package manager (all include `librubberband`):
+
+```bash
+# Debian / Ubuntu
+sudo apt install ffmpeg
+
+# Fedora (enable RPM Fusion first)
+sudo dnf install ffmpeg
+
+# Arch
+sudo pacman -S ffmpeg
+```
+
+Verify:
+
+```bash
+ffmpeg -hide_banner -filters | grep rubberband
+```
+
+</details>
+
+**Prefer not to touch `PATH`?** Set the `FFMPEG` environment variable instead —
+point it at the binary *or* at the folder containing it:
+
+- macOS / Linux: `export FFMPEG=/usr/local/bin/ffmpeg`
+- Windows (PowerShell): `$env:FFMPEG = "C:\ffmpeg\bin"`
+
+### Step 3 — Get Master Beater
+
+**Option A — download the ZIP:**
+
+1. On the GitHub page, click the green **Code** button → **Download ZIP**.
+2. Unzip it somewhere permanent, e.g. `~/Apps/master-beater` (macOS/Linux) or
+   `C:\Apps\master-beater` (Windows).
+
+**Option B — clone with git:**
+
+```bash
+git clone https://github.com/DeeKozman/master-beater.git
+```
+
+### Step 4 — Install dependencies and run
+
+Open a terminal **inside the `master-beater` folder** and run:
 
 ```bash
 npm install
 npm start
 ```
 
-Then open `http://localhost:8461`.
+Then open **<http://localhost:8461>** in **Chrome or Edge**.
+
+**One-click launchers** (they install dependencies on first run, start the
+server, and open your browser):
+
+- **macOS / Linux:** `./start.sh` — the first time, make it executable with
+  `chmod +x start.sh stop.sh`. Stop the server with `./stop.sh`.
+- **Windows:** double-click **`start.bat`**. Stop it with **`stop.bat`**.
+
+### Browser support
+
+Use **Chrome or Edge** for the **Folder…** button (save outputs straight into a
+folder you pick — this uses the File System Access API). On **Safari** or
+**Firefox** that button falls back to putting the three output files
+(`.mp4`, `.beats.json`, `.beats.srt`) in your normal Downloads folder; Safari may
+ask you to allow multiple downloads the first time. Everything else works in all
+modern browsers.
+
+### Changing the port
+
+The server listens on **8461**. To use a different port, set `PORT`:
+
+- macOS / Linux: `PORT=9000 npm start`
+- Windows (PowerShell): `$env:PORT = 9000; npm start`
 
 ---
 
@@ -244,7 +413,7 @@ Detection is a starting point, not gospel: expect to nudge the BPM (or hit ÷2 /
 | `/` and assets | GET | — | the app (static `public/`) |
 | `/render` | POST | multipart: `audio`, `beats` (JSON), `fps`, `width`, `height`, `duration` | `video/mp4` stream |
 | `/conform` | POST | multipart: `audio`, `fromBpm`, `toBpm`, `sampleRate` (`48000` \| `source`) | `audio/wav` stream |
-| `/capabilities` | GET | — | `{ "rubberband": bool, "ffmpeg": "<path>" }` |
+| `/capabilities` | GET | — | `{ "rubberband": bool, "ffmpeg": "<path>", "ffmpegFound": bool }` |
 
 Uploads and intermediate files live under `os.tmpdir()/master-beater` and are
 deleted after each request. The render command is:
@@ -272,6 +441,8 @@ server.js            Express server: /render, /conform, /capabilities
 public/index.html    Markup
 public/style.css     Retro amp/console styling
 public/app.js        All client logic (one IIFE)
-start.bat / stop.bat Windows helpers
+start.sh  / stop.sh  macOS / Linux launchers
+start.bat / stop.bat Windows launchers
+docs/hero.png        README screenshot
 .claude/launch.json  Dev-server config for the Claude Code preview
 ```

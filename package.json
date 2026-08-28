@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "BPM detector and beat-overlay video generator",
   "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js"
   },

@@ -6,7 +6,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
-const PORT = 8461;
+const PORT = process.env.PORT || 8461;
 function resolveFfmpeg() {
   let v = process.env.FFMPEG;
   if (!v) return 'ffmpeg';
@@ -21,13 +21,24 @@ function resolveFfmpeg() {
   return v;
 }
 const FFMPEG = resolveFfmpeg();
-console.log('Using ffmpeg:', FFMPEG);
 
-// Probe once for the rubberband filter (needs an ffmpeg built --enable-librubberband).
+// Probe once: is ffmpeg on PATH at all, and is it built with the rubberband
+// filter (needs --enable-librubberband) that the Tempo Lab relies on?
+let FFMPEG_FOUND = false;
 let HAS_RUBBERBAND = false;
 execFile(FFMPEG, ['-hide_banner', '-filters'], { maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+  if (err && (err.code === 'ENOENT' || /ENOENT|not recognized|cannot find/i.test(err.message))) {
+    console.warn(
+      '\n  !!  ffmpeg was not found (looked for "' + FFMPEG + '").\n' +
+      '      Rendering and tempo conform will fail until ffmpeg is installed and on your PATH.\n' +
+      '      See the "Installation" section of the README for step-by-step, per-platform instructions.\n'
+    );
+    return;
+  }
+  FFMPEG_FOUND = true;
   HAS_RUBBERBAND = !err && /\brubberband\b/.test(stdout || '');
-  console.log('rubberband filter:', HAS_RUBBERBAND ? 'available' : 'NOT available');
+  console.log('ffmpeg: ' + FFMPEG + '  ·  rubberband filter: '
+    + (HAS_RUBBERBAND ? 'available' : 'NOT available — Tempo Lab is disabled'));
 });
 
 const app = express();
@@ -140,7 +151,11 @@ app.post('/render', upload.single('audio'), async (req, res) => {
     res.status(500).json({ error: msg, stderr: extra.slice(-4000) });
   };
   ff.stderr.on('data', d => { stderr += d.toString(); });
-  ff.on('error', err => fail('ffmpeg spawn failed: ' + err.message, stderr));
+  ff.on('error', err => fail(
+    err.code === 'ENOENT'
+      ? 'ffmpeg not found ("' + FFMPEG + '"). Install it — see the README "Installation" section.'
+      : 'ffmpeg spawn failed: ' + err.message,
+    stderr));
   ff.on('close', code => {
     if (responded) return;
     if (code !== 0) return fail('ffmpeg exit ' + code, stderr);
@@ -155,7 +170,7 @@ app.post('/render', upload.single('audio'), async (req, res) => {
 });
 
 app.get('/capabilities', (_req, res) => {
-  res.json({ rubberband: HAS_RUBBERBAND, ffmpeg: FFMPEG });
+  res.json({ rubberband: HAS_RUBBERBAND, ffmpeg: FFMPEG, ffmpegFound: FFMPEG_FOUND });
 });
 
 // Pitch-preserving tempo conform (rubberband). From/to BPM -> stretched WAV.
@@ -208,7 +223,11 @@ app.post('/conform', upload.single('audio'), (req, res) => {
     res.status(500).json({ error: msg, stderr: extra.slice(-4000) });
   };
   ff.stderr.on('data', d => { stderr += d.toString(); });
-  ff.on('error', err => fail('ffmpeg spawn failed: ' + err.message, stderr));
+  ff.on('error', err => fail(
+    err.code === 'ENOENT'
+      ? 'ffmpeg not found ("' + FFMPEG + '"). Install it — see the README "Installation" section.'
+      : 'ffmpeg spawn failed: ' + err.message,
+    stderr));
   ff.on('close', code => {
     if (responded) return;
     if (code !== 0) return fail('ffmpeg exit ' + code, stderr);
@@ -230,5 +249,5 @@ function cleanup(paths) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Master Beater running: http://localhost:${PORT}`);
+  console.log(`Master Beater running: http://localhost:${PORT}  (set PORT to change)`);
 });
